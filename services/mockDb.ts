@@ -1,8 +1,6 @@
 
 import { Agent, Customer, Product, User, Message, FinancialConfig } from '../types';
 
-const API_URL = 'http://localhost:5000/api';
-
 // Helper to handle fetch responses
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
@@ -13,11 +11,19 @@ const handleResponse = async (response: Response) => {
 };
 
 class ApiService {
+  // Default to localhost, but allow overriding via setBaseUrl
+  private baseUrl: string = 'http://localhost:5000/api';
+
+  setBaseUrl(url: string) {
+    // Remove trailing slash if present to avoid double slashes
+    this.baseUrl = url.endsWith('/') ? url.slice(0, -1) : url;
+    console.log(`[API] Base URL set to: ${this.baseUrl}`);
+  }
   
   // --- Auth ---
   async login(email: string, password: string): Promise<User | null> {
     try {
-      const res = await fetch(`${API_URL}/login`, {
+      const res = await fetch(`${this.baseUrl}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -30,7 +36,7 @@ class ApiService {
   }
 
   async getUser(id: string): Promise<User | null> {
-    const res = await fetch(`${API_URL}/users/${id}`);
+    const res = await fetch(`${this.baseUrl}/users/${id}`);
     return res.ok ? res.json() : null;
   }
 
@@ -39,12 +45,12 @@ class ApiService {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
-    const res = await fetch(`${API_URL}/agents?${params.toString()}`);
+    const res = await fetch(`${this.baseUrl}/agents?${params.toString()}`);
     return handleResponse(res);
   }
 
   async createAgent(data: any): Promise<Agent> {
-    const res = await fetch(`${API_URL}/agents`, {
+    const res = await fetch(`${this.baseUrl}/agents`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -53,7 +59,7 @@ class ApiService {
   }
 
   async updateAgent(id: string, data: Partial<Agent>): Promise<Agent | null> {
-    const res = await fetch(`${API_URL}/agents/${id}`, {
+    const res = await fetch(`${this.baseUrl}/agents/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -66,7 +72,7 @@ class ApiService {
   }
 
   async updateAgentTarget(id: string, startDate: string, endDate: string, target: number): Promise<void> {
-    await fetch(`${API_URL}/agents/${id}/target`, {
+    await fetch(`${this.baseUrl}/agents/${id}/target`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ startDate, endDate, target })
@@ -74,9 +80,6 @@ class ApiService {
   }
 
   async removeAgentTarget(id: string, startDate: string, endDate: string): Promise<void> {
-    // Implementing via updateAgent logic on backend or specific endpoint could be done, 
-    // for now standard update works if array manipulation logic was fully exposed, 
-    // but we'll just keep targets intact or add specific delete route if needed.
     // Skipping implementation for brevity as update covers overwriting.
   }
 
@@ -85,11 +88,10 @@ class ApiService {
   }
 
   async deleteAgent(id: string): Promise<void> {
-    await fetch(`${API_URL}/agents/${id}`, { method: 'DELETE' });
+    await fetch(`${this.baseUrl}/agents/${id}`, { method: 'DELETE' });
   }
 
   async toggleAgentStatus(id: string): Promise<Agent | undefined> {
-    // Need to fetch first to toggle, or specific endpoint. Simplified:
     const agent = await this.getUser(id) as Agent;
     if(agent) {
        return await this.updateAgent(id, { active: !agent.active }) as Agent;
@@ -101,12 +103,12 @@ class ApiService {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
-    const res = await fetch(`${API_URL}/customers?${params.toString()}`);
+    const res = await fetch(`${this.baseUrl}/customers?${params.toString()}`);
     return handleResponse(res);
   }
 
   async createCustomer(data: any): Promise<Customer> {
-    const res = await fetch(`${API_URL}/customers`, {
+    const res = await fetch(`${this.baseUrl}/customers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -115,7 +117,7 @@ class ApiService {
   }
 
   async updateCustomer(id: string, data: Partial<Customer>): Promise<Customer | null> {
-    const res = await fetch(`${API_URL}/customers/${id}`, {
+    const res = await fetch(`${this.baseUrl}/customers/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -124,20 +126,19 @@ class ApiService {
   }
 
   async deleteCustomer(id: string): Promise<void> {
-    await fetch(`${API_URL}/customers/${id}`, { method: 'DELETE' });
+    await fetch(`${this.baseUrl}/customers/${id}`, { method: 'DELETE' });
   }
 
   // --- Products ---
   async getProducts(endDate?: string): Promise<Product[]> {
     const params = new URLSearchParams();
     if (endDate) params.append('endDate', endDate);
-    const res = await fetch(`${API_URL}/products?${params.toString()}`);
+    const res = await fetch(`${this.baseUrl}/products?${params.toString()}`);
     return handleResponse(res);
   }
 
   async createProduct(data: any): Promise<Product> {
-    // Images are sent as Base64 strings in the JSON body
-    const res = await fetch(`${API_URL}/products`, {
+    const res = await fetch(`${this.baseUrl}/products`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -146,7 +147,7 @@ class ApiService {
   }
 
   async updateProduct(id: string, data: Partial<Product>): Promise<Product | null> {
-    const res = await fetch(`${API_URL}/products/${id}`, {
+    const res = await fetch(`${this.baseUrl}/products/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
@@ -155,17 +156,17 @@ class ApiService {
   }
 
   async deleteProduct(id: string): Promise<void> {
-    await fetch(`${API_URL}/products/${id}`, { method: 'DELETE' });
+    await fetch(`${this.baseUrl}/products/${id}`, { method: 'DELETE' });
   }
 
   // --- Chat ---
   async getMessages(userId: string): Promise<Message[]> {
-    const res = await fetch(`${API_URL}/messages/${userId}`);
+    const res = await fetch(`${this.baseUrl}/messages/${userId}`);
     return handleResponse(res);
   }
 
   async sendMessage(fromId: string, toId: string, text: string, images?: string[]): Promise<Message> {
-    const res = await fetch(`${API_URL}/messages`, {
+    const res = await fetch(`${this.baseUrl}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fromId, toId, text, images })
@@ -174,11 +175,11 @@ class ApiService {
   }
 
   async deleteMessage(id: string): Promise<void> {
-    await fetch(`${API_URL}/messages/${id}`, { method: 'DELETE' });
+    await fetch(`${this.baseUrl}/messages/${id}`, { method: 'DELETE' });
   }
 
   async updateMessage(id: string, text: string): Promise<void> {
-    await fetch(`${API_URL}/messages/${id}`, {
+    await fetch(`${this.baseUrl}/messages/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })
@@ -186,7 +187,7 @@ class ApiService {
   }
 
   async markAsRead(msgIds: string[]) {
-    await fetch(`${API_URL}/messages/read`, {
+    await fetch(`${this.baseUrl}/messages/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: msgIds })
@@ -198,19 +199,19 @@ class ApiService {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
-    const res = await fetch(`${API_URL}/stats?${params.toString()}`);
+    const res = await fetch(`${this.baseUrl}/stats?${params.toString()}`);
     return handleResponse(res);
   }
 
   async getFinancialConfig(endDate?: string) {
     const params = new URLSearchParams();
     if (endDate) params.append('endDate', endDate);
-    const res = await fetch(`${API_URL}/financials/config?${params.toString()}`);
+    const res = await fetch(`${this.baseUrl}/financials/config?${params.toString()}`);
     return handleResponse(res);
   }
 
   async updateFinancialConfig(newConfig: FinancialConfig) {
-    await fetch(`${API_URL}/financials/config`, {
+    await fetch(`${this.baseUrl}/financials/config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newConfig)
@@ -221,7 +222,7 @@ class ApiService {
     const params = new URLSearchParams();
     if (startDate) params.append('startDate', startDate);
     if (endDate) params.append('endDate', endDate);
-    const res = await fetch(`${API_URL}/financials/report?${params.toString()}`);
+    const res = await fetch(`${this.baseUrl}/financials/report?${params.toString()}`);
     return handleResponse(res);
   }
 }
