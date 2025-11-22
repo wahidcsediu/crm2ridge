@@ -20,7 +20,7 @@ import { db } from './services/mockDb'; // Import the API service
 // 2. Keep 'http://localhost:5000/api' for local development
 // ============================================================================
 const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://your-render-app-name.onrender.com/api' // <--- PASTE YOUR RENDER URL HERE
+  ? 'https://ridge2crmbackend.onrender.com' // <--- PASTE YOUR RENDER URL HERE
   : 'http://localhost:5000/api';
 
 // Initialize the DB service with the correct URL
