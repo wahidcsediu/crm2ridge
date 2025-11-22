@@ -19,13 +19,7 @@ import { db } from './services/mockDb'; // Import the API service
 // 1. Replace the URL below with your Render Backend URL (e.g., https://my-app.onrender.com/api)
 // 2. Keep 'http://localhost:5000/api' for local development
 // ============================================================================
-const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://ridge2crmbackend.onrender.com' // <--- PASTE YOUR RENDER URL HERE
-  : 'http://localhost:5000/api';
-
-// Initialize the DB service with the correct URL
-db.setBaseUrl(API_BASE_URL);
-// ============================================================================
+const API_BASE_URL = 'import.meta.env.VITE_API_URL';
 
 const ProtectedRoute = ({ children, adminOnly = false }: { children?: React.ReactNode; adminOnly?: boolean }) => {
   const { user, isLoading } = useAuth();
