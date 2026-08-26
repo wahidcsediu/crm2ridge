@@ -160,6 +160,8 @@ const INITIAL_FINANCIAL_CONFIG: FinancialConfig = {
   taxes: 0,
 };
 
+const STORAGE_KEY = 'ridge_park_db_v2';
+
 class MockDatabase {
   private agents: StoredAgent[] = [...INITIAL_AGENTS];
   private customers: Customer[] = [...INITIAL_CUSTOMERS];
@@ -167,8 +169,45 @@ class MockDatabase {
   private messages: Message[] = [];
   private financialSettings: FinancialConfig = { ...INITIAL_FINANCIAL_CONFIG };
 
-  // Helper to simulate network delay
-  private async delay(ms = 300) {
+  constructor() {
+    this.loadFromStorage();
+  }
+
+  private loadFromStorage() {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      const data = localStorage.getItem(STORAGE_KEY);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (parsed.agents && Array.isArray(parsed.agents)) this.agents = parsed.agents;
+        if (parsed.customers && Array.isArray(parsed.customers)) this.customers = parsed.customers;
+        if (parsed.products && Array.isArray(parsed.products)) this.products = parsed.products;
+        if (parsed.messages && Array.isArray(parsed.messages)) this.messages = parsed.messages;
+        if (parsed.financialSettings) this.financialSettings = parsed.financialSettings;
+      }
+    } catch (e) {
+      console.warn("Failed to load local DB storage, using initial mock data:", e);
+    }
+  }
+
+  private saveToStorage() {
+    try {
+      if (typeof window === 'undefined' || !window.localStorage) return;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        agents: this.agents,
+        customers: this.customers,
+        products: this.products,
+        messages: this.messages,
+        financialSettings: this.financialSettings,
+      }));
+    } catch (e) {
+      console.warn("Failed to save local DB storage:", e);
+    }
+  }
+
+  // Zero-delay helper for instant UI rendering
+  private async delay(ms = 0) {
+    if (ms <= 0) return Promise.resolve();
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
@@ -196,7 +235,7 @@ class MockDatabase {
 
   // --- Auth ---
   async login(email: string, password: string): Promise<User | null> {
-    await this.delay(800);
+    await this.delay(0);
     // Trim inputs to avoid spaces causing auth failure
     const cleanEmail = email.trim();
     const cleanPass = password.trim();
@@ -245,6 +284,7 @@ class MockDatabase {
       createdAt: new Date().toISOString(),
     };
     this.agents.push(newAgent);
+    this.saveToStorage();
     const { password, ...createdAgent } = newAgent;
     return createdAgent;
   }
@@ -254,6 +294,7 @@ class MockDatabase {
     const index = this.agents.findIndex(a => a.id === id);
     if (index === -1) return null;
     this.agents[index] = { ...this.agents[index], ...updates };
+    this.saveToStorage();
     const { password, ...updatedAgent } = this.agents[index];
     return updatedAgent;
   }
@@ -261,7 +302,10 @@ class MockDatabase {
   async updateAgentCommission(id: string, rate: number): Promise<void> {
     await this.delay();
     const agent = this.agents.find(a => a.id === id);
-    if (agent) agent.commissionRate = rate;
+    if (agent) {
+      agent.commissionRate = rate;
+      this.saveToStorage();
+    }
   }
 
   async updateAgentTarget(id: string, startDate: string, endDate: string, target: number): Promise<void> {
@@ -275,6 +319,7 @@ class MockDatabase {
           } else {
               agent.targets.push({ startDate, endDate, target });
           }
+          this.saveToStorage();
       }
   }
 
@@ -283,24 +328,32 @@ class MockDatabase {
     const agent = this.agents.find(a => a.id === id);
     if (agent && agent.targets) {
         agent.targets = agent.targets.filter(t => !(t.startDate === startDate && t.endDate === endDate));
+        this.saveToStorage();
     }
   }
 
   async resetAgentPassword(id: string, newPass: string): Promise<void> {
     await this.delay();
     const agent = this.agents.find(a => a.id === id);
-    if (agent) agent.password = newPass;
+    if (agent) {
+      agent.password = newPass;
+      this.saveToStorage();
+    }
   }
 
   async deleteAgent(id: string): Promise<void> {
     await this.delay();
     this.agents = this.agents.filter(a => a.id !== id);
+    this.saveToStorage();
   }
 
   async toggleAgentStatus(id: string): Promise<Agent | undefined> {
     await this.delay();
     const agent = this.agents.find(a => a.id === id);
-    if (agent) agent.active = !agent.active;
+    if (agent) {
+      agent.active = !agent.active;
+      this.saveToStorage();
+    }
     return agent;
   }
 
@@ -326,6 +379,7 @@ class MockDatabase {
         updatedAt: now
     };
     this.customers.push(newCust);
+    this.saveToStorage();
     return newCust;
   }
 
@@ -364,6 +418,7 @@ class MockDatabase {
         ...data,
         updatedAt: new Date().toISOString()
     };
+    this.saveToStorage();
     
     return this.customers[index];
   }
@@ -371,6 +426,7 @@ class MockDatabase {
   async deleteCustomer(id: string): Promise<void> {
     await this.delay();
     this.customers = this.customers.filter(c => c.id !== id);
+    this.saveToStorage();
   }
 
   // --- Products ---
@@ -390,6 +446,7 @@ class MockDatabase {
         createdAt: new Date().toISOString() 
     };
     this.products.push(newProd);
+    this.saveToStorage();
     return newProd;
   }
 
@@ -409,12 +466,14 @@ class MockDatabase {
     }
 
     this.products[index] = updatedProduct;
+    this.saveToStorage();
     return this.products[index];
   }
 
   async deleteProduct(id: string): Promise<void> {
     await this.delay();
     this.products = this.products.filter(p => p.id !== id);
+    this.saveToStorage();
   }
 
   // --- Chat System ---
@@ -435,11 +494,13 @@ class MockDatabase {
           edited: false
       };
       this.messages.push(msg);
+      this.saveToStorage();
       return msg;
   }
 
   async deleteMessage(id: string): Promise<void> {
       this.messages = this.messages.filter(m => m.id !== id);
+      this.saveToStorage();
   }
 
   async updateMessage(id: string, text: string): Promise<void> {
@@ -447,6 +508,7 @@ class MockDatabase {
       if (msg) {
           msg.text = text;
           msg.edited = true;
+          this.saveToStorage();
       }
   }
 
@@ -456,6 +518,7 @@ class MockDatabase {
               m.read = true;
           }
       });
+      this.saveToStorage();
   }
 
   // --- Financials & Stats ---
@@ -506,6 +569,7 @@ class MockDatabase {
   async updateFinancialConfig(newConfig: FinancialConfig) {
     await this.delay();
     this.financialSettings = newConfig;
+    this.saveToStorage();
   }
 
   async getFinancialReport(startDate?: string, endDate?: string) {

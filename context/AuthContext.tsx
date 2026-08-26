@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -10,23 +10,21 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Check local storage for session
+const getStoredUser = (): User | null => {
+  try {
     const storedUser = localStorage.getItem('ridge_park_user');
-    if (storedUser) {
-      try {
-        setUser(JSON.parse(storedUser));
-      } catch (e) {
-        console.error("Failed to parse user session");
-        localStorage.removeItem('ridge_park_user');
-      }
-    }
-    setIsLoading(false);
-  }, []);
+    return storedUser ? JSON.parse(storedUser) : null;
+  } catch (e) {
+    console.error("Failed to parse user session");
+    localStorage.removeItem('ridge_park_user');
+    return null;
+  }
+};
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Synchronous initialization prevents layout flash on refresh
+  const [user, setUser] = useState<User | null>(getStoredUser);
+  const [isLoading] = useState<boolean>(false);
 
   const login = (userData: User) => {
     setUser(userData);
