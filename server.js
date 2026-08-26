@@ -23,9 +23,13 @@ cloudinary.config({
 });
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ MongoDB Connected'))
-  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+if (process.env.MONGODB_URI) {
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('✅ MongoDB Connected'))
+    .catch(err => console.error('❌ MongoDB Connection Error:', err));
+} else {
+  console.log('ℹ️ MONGODB_URI not set. Running in local/mock mode.');
+}
 
 // --- Mongoose Schemas ---
 
