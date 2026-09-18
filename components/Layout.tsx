@@ -17,7 +17,11 @@ import {
   Briefcase,
   Sparkles,
   Calculator,
-  Bell
+  Bell,
+  MessageSquare,
+  Activity,
+  Calendar as CalendarIcon,
+  TrendingUp
 } from 'lucide-react';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 
@@ -48,11 +52,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isAdmin = user?.role === 'admin';
 
   const navItems = [
-    ...(isAdmin ? [{ path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} /> }] : []),
-    ...(isAdmin ? [{ path: '/agents', label: 'Agents', icon: <UserCircle size={20} /> }] : []),
-    { path: '/customers', label: 'Customers', icon: <Users size={20} /> },
-    { path: '/products', label: 'Properties', icon: <ShoppingBag size={20} /> },
-    ...(isAdmin ? [{ path: '/accounts', label: 'Accounts', icon: <Calculator size={20} /> }] : []),
+    { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+    { path: '/customers', label: 'Lead Pipeline', icon: <Users size={18} /> },
+    { path: '/activities', label: 'Activity & Calendar', icon: <Activity size={18} /> },
+    { path: '/reports', label: 'Performance', icon: <TrendingUp size={18} /> },
+    { path: '/products', label: 'Properties', icon: <ShoppingBag size={18} /> },
+    { path: '/agents', label: isAdmin ? 'Agent Management' : 'My Agent Profile', icon: <UserCircle size={18} /> },
+    ...(isAdmin ? [{ path: '/accounts', label: 'Accounts', icon: <Calculator size={18} /> }] : []),
   ];
 
   return (

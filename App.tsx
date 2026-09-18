@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -11,21 +10,18 @@ import { Agents } from './pages/Agents';
 import { Customers } from './pages/Customers';
 import { Products } from './pages/Products';
 import { Accounts } from './pages/Accounts';
-import { db } from './services/mockDb'; // Import the API service
+import { WhatsAppHub } from './pages/WhatsAppHub';
+import { AgentActivities } from './pages/AgentActivities';
+import { CalendarManagement } from './pages/CalendarManagement';
+import { PerformanceReports } from './pages/PerformanceReports';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { db } from './services/mockDb';
 
-// ============================================================================
-// API CONFIGURATION
-// ============================================================================
-// 1. Replace the URL below with your Render Backend URL (e.g., https://my-app.onrender.com/api)
-// 2. Keep 'http://localhost:5000/api' for local development
-// ============================================================================
 const API_BASE_URL = process.env.NODE_ENV === 'production'
-  ? 'https://your-render-app-name.onrender.com/api' // <--- PASTE YOUR RENDER URL HERE
+  ? 'https://your-render-app-name.onrender.com/api'
   : 'http://localhost:5000/api';
 
-// Initialize the DB service with the correct URL
 db.setBaseUrl(API_BASE_URL);
-// ============================================================================
 
 const ProtectedRoute = ({ children, adminOnly = false }: { children?: React.ReactNode; adminOnly?: boolean }) => {
   const { user, isLoading } = useAuth();
@@ -39,21 +35,16 @@ const ProtectedRoute = ({ children, adminOnly = false }: { children?: React.Reac
   }
 
   if (adminOnly && user.role !== 'admin') {
-    return <Navigate to="/customers" replace />;
+    return <Navigate to="/" replace />;
   }
 
-  return <Layout>{children}</Layout>;
-};
-
-// Dashboard wrapper to handle redirects for agents
-const DashboardWrapper = () => {
-  const { user } = useAuth();
-  
-  if (user?.role === 'agent') {
-    return <Navigate to="/customers" replace />;
-  }
-  
-  return <Dashboard />;
+  return (
+    <Layout>
+      <ErrorBoundary>
+        {children}
+      </ErrorBoundary>
+    </Layout>
+  );
 };
 
 const AppRoutes = () => {
@@ -63,25 +54,41 @@ const AppRoutes = () => {
       
       <Route path="/" element={
         <ProtectedRoute>
-          <DashboardWrapper />
+          <Dashboard />
         </ProtectedRoute>
       } />
-      
-      <Route path="/agents" element={
-        <ProtectedRoute adminOnly>
-          <Agents />
-        </ProtectedRoute>
-      } />
-      
+
       <Route path="/customers" element={
         <ProtectedRoute>
           <Customers />
         </ProtectedRoute>
       } />
 
+      <Route path="/whatsapp" element={<Navigate to="/customers" replace />} />
+
+      <Route path="/activities" element={
+        <ProtectedRoute>
+          <AgentActivities />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/calendar" element={<Navigate to="/activities" replace />} />
+
+      <Route path="/reports" element={
+        <ProtectedRoute>
+          <PerformanceReports />
+        </ProtectedRoute>
+      } />
+      
       <Route path="/products" element={
         <ProtectedRoute>
           <Products />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/agents" element={
+        <ProtectedRoute>
+          <Agents />
         </ProtectedRoute>
       } />
 
@@ -102,7 +109,7 @@ const App: React.FC = () => {
       <DateFilterProvider>
         <ChatProvider>
           <HashRouter>
-              <AppRoutes />
+            <AppRoutes />
           </HashRouter>
         </ChatProvider>
       </DateFilterProvider>

@@ -1,250 +1,378 @@
-
-import React, { useEffect, useState } from 'react';
-import { db } from '../services/mockDb';
-import { Customer, Product } from '../types';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { Loader } from '../components/ui/Loader';
-import { MonthControl } from '../components/ui/MonthControl';
-import { ConfirmationModal } from '../components/ui/ConfirmationModal';
-import { Plus, Phone, Mail, Pencil, Clock, Target, Home, Search, CheckCircle, MapPin } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Customer, PipelineStage, PIPELINE_STAGES, LeadCategory, LeadSource, PriorityLevel } from '../types';
+import { mockDb } from '../services/mockDb';
 import { useAuth } from '../context/AuthContext';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useDateFilter } from '../context/DateFilterContext';
+import { KanbanBoard } from '../components/leads/KanbanBoard';
+import { LeadDetailsModal } from '../components/leads/LeadDetailsModal';
+import { AddLeadModal } from '../components/leads/AddLeadModal';
+import { ImportLeadsModal } from '../components/leads/ImportLeadsModal';
+import { 
+  Kanban, List, Search, Filter, Plus, Upload, 
+  Phone, MessageSquare, MapPin, User, Building, 
+  DollarSign, ArrowUpDown, ChevronDown, CheckSquare, RefreshCw, X
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export const Customers: React.FC = () => {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const { user } = useAuth();
-  const { startDate, endDate, activeMonthName } = useDateFilter();
-  
-  const [form, setForm] = useState({ name: '', email: '', phone: '', budget: 0, status: 'Lead', propertyId: '' });
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  
-  // Search state for property selector
-  const [propertySearch, setPropertySearch] = useState('');
+  const [leads, setLeads] = useState<Customer[]>([]);
+  const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStage, setFilterStage] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('all');
+  const [filterPriority, setFilterPriority] = useState<string>('all');
+  const [filterAgent, setFilterAgent] = useState<string>('all');
 
-  const fetchCustomers = async () => {
-    setLoading(true);
-    const data = await db.getCustomers(startDate, endDate);
-    const prods = await db.getProducts();
-    setAllProducts(prods);
-    setCustomers(data);
-    setLoading(false);
+  // Modals
+  const [selectedLeadId, setSelectedLeadId] = useState<string | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+
+  // Quick Assignment for Multiple or Single
+  const [agents, setAgents] = useState<{ id: string; name: string }[]>([]);
+
+  const loadData = async () => {
+    const fetchedLeads = await mockDb.getCustomers();
+    setLeads(fetchedLeads);
+
+    const fetchedAgents = await mockDb.getAgents();
+    setAgents(fetchedAgents.map(a => ({ id: a.id, name: a.name })));
   };
 
   useEffect(() => {
-    fetchCustomers();
-  }, [startDate, endDate]);
+    loadData();
+  }, []);
 
-  const handleOpenModal = (customer?: Customer) => { 
-      setPropertySearch('');
-      if (customer) { 
-          setEditingId(customer.id); 
-          setForm({ 
-              name: customer.name, 
-              email: customer.email, 
-              phone: customer.phone, 
-              budget: customer.budget, 
-              status: customer.status,
-              propertyId: customer.propertyId || '' 
-          }); 
-      } else { 
-          setEditingId(null); 
-          setForm({ name: '', email: '', phone: '', budget: 0, status: 'Lead', propertyId: '' }); 
-      } 
-      setIsModalOpen(true); 
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => { 
-      e.preventDefault(); 
-      const submission = { ...form, budget: Number(form.budget) };
-      
-      if (editingId) { 
-          await db.updateCustomer(editingId, submission); 
-      } else { 
-          await db.createCustomer({ ...submission, agentId: user?.id }); 
-      } 
-      setIsModalOpen(false); 
-      fetchCustomers(); 
+  const handleOpenLead = (lead: Customer) => {
+    setSelectedLeadId(lead.id);
+    setIsDetailsOpen(true);
   };
 
-  const confirmDelete = async () => { if(deleteId) { setIsDeleting(true); await db.deleteCustomer(deleteId); setIsDeleting(false); setDeleteId(null); fetchCustomers(); } }
-  const getWinProbability = (status: string) => { switch(status) { case 'Closed': return 100; case 'Negotiation': return 75; case 'Lead': return 25; default: return 10; } }
-  const formatBDTime = (isoString: string) => { return new Date(isoString).toLocaleString('en-GB', { timeZone: 'Asia/Dhaka', month: 'short', day: 'numeric' }); };
+  const handleQuickAssign = async (leadId: string, agentId: string) => {
+    const targetAgent = agents.find(a => a.id === agentId);
+    if (targetAgent) {
+      await mockDb.updateCustomer(leadId, {
+        agentId: targetAgent.id,
+        agentName: targetAgent.name
+      }, user || undefined);
+      loadData();
+    }
+  };
 
-  // Filter properties: Show ALL properties filtered by search (removed availability check)
-  const filteredProperties = allProducts.filter(p => 
-      p.title.toLowerCase().includes(propertySearch.toLowerCase()) ||
-      p.address.toLowerCase().includes(propertySearch.toLowerCase())
-  );
+  // Filtered Leads
+  const filteredLeads = leads.filter(lead => {
+    const matchSearch = searchTerm === '' || 
+      lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      lead.phone.includes(searchTerm) ||
+      (lead.interestedProject && lead.interestedProject.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (lead.agentName && lead.agentName.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  if (loading) return <Loader />;
+    const matchStage = filterStage === 'all' || lead.status === filterStage;
+    const matchCategory = filterCategory === 'all' || lead.category === filterCategory;
+    const matchSource = filterSource === 'all' || lead.source === filterSource;
+    const matchPriority = filterPriority === 'all' || lead.priority === filterPriority;
+    const matchAgent = filterAgent === 'all' || lead.agentId === filterAgent;
+
+    return matchSearch && matchStage && matchCategory && matchSource && matchPriority && matchAgent;
+  });
+
+  const formatCurrency = (val: number) => {
+    return `$${val.toLocaleString()}`;
+  };
 
   return (
-    <div className="space-y-6 relative">
-       <ConfirmationModal isOpen={!!deleteId} title="Delete Customer" message="Are you sure?" onConfirm={confirmDelete} onCancel={() => setDeleteId(null)} />
-
-       <div className="flex flex-col md:flex-row justify-between items-end gap-4 pb-6 border-b border-white/5">
+    <div className="space-y-6">
+      {/* Page Title & Master Action Bar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-            <h2 className="text-3xl font-bold text-white font-display">Customers</h2>
-            <p className="text-zinc-400 text-sm mt-1">Leads for <span className="text-red-500 font-bold">{activeMonthName}</span></p>
+          <h1 className="text-2xl font-bold text-white font-display flex items-center gap-3">
+            Lead Management & Pipeline
+            <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-red-950/80 text-red-400 border border-red-500/30">
+              {leads.length} Total Records
+            </span>
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">
+            End-to-end client journey tracking across the full 11-stage sales funnel with live WhatsApp & activity audit.
+          </p>
         </div>
-        <div className="flex items-center gap-4">
-            <MonthControl />
-            <Button icon={<Plus size={18} />} onClick={() => handleOpenModal()}>Add Customer</Button>
+
+        {/* View switcher and Create buttons */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex bg-zinc-900 p-1 rounded-xl border border-zinc-800">
+            <button
+              onClick={() => setViewMode('kanban')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                viewMode === 'kanban' ? 'bg-red-600 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <Kanban size={14} /> Pipeline Kanban
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                viewMode === 'table' ? 'bg-red-600 text-white shadow-md' : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              <List size={14} /> Data Table
+            </button>
+          </div>
+
+          <button
+            onClick={() => setIsImportOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-700 transition-all"
+          >
+            <Upload size={14} /> Bulk Import
+          </button>
+
+          <button
+            onClick={() => setIsAddOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-lg shadow-red-600/20 transition-all"
+          >
+            <Plus size={14} /> Register Lead
+          </button>
         </div>
       </div>
 
-      <Card className="overflow-visible p-0 bg-transparent border-0 shadow-none" noTilt>
-        <div className="overflow-x-auto perspective-1000 pb-4">
-          <table className="w-full text-left text-sm text-zinc-400 border-separate border-spacing-y-3">
-            <thead className="uppercase font-bold text-xs tracking-wider text-zinc-600 font-display ml-2">
-              <tr><th className="px-6 pb-2">Client</th><th className="px-6 pb-2">Win Probability</th><th className="px-6 pb-2">Budget</th><th className="px-6 pb-2">Status</th><th className="px-6 pb-2">Date</th><th className="px-6 pb-2 text-right">Action</th></tr>
-            </thead>
-            <tbody>
-              <AnimatePresence>
-                {customers.map((c, i) => { const winProb = getWinProbability(c.status); return (
-                  <motion.tr key={c.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i*0.05 }} className="bg-zinc-900/40 backdrop-blur-sm rounded-2xl border border-transparent hover:bg-zinc-800 transition-colors">
-                     <td className="px-6 py-4 rounded-l-2xl border-y border-l border-white/5"><div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center font-bold text-white">{c.name.charAt(0)}</div><div><div className="font-bold text-white">{c.name}</div><div className="text-xs text-zinc-500">{c.email}</div></div></div></td>
-                     <td className="px-6 py-4 border-y border-white/5"><div className="flex flex-col gap-1"><div className="flex justify-between text-xs font-bold"><span className={winProb > 50 ? 'text-green-400' : 'text-zinc-400'}>{winProb}%</span><Target size={12} /></div><div className="w-20 h-1 bg-zinc-800 rounded-full overflow-hidden"><div style={{width:`${winProb}%`}} className={`h-full ${winProb===100?'bg-green-500':'bg-red-500'}`}></div></div></div></td>
-                     <td className="px-6 py-4 border-y border-white/5 font-bold text-white">৳{c.budget.toLocaleString()}</td>
-                     <td className="px-6 py-4 border-y border-white/5"><span className={`px-2 py-1 rounded text-xs font-bold uppercase ${c.status==='Closed'?'bg-green-900/20 text-green-400':'bg-blue-900/20 text-blue-400'}`}>{c.status}</span></td>
-                     <td className="px-6 py-4 border-y border-white/5 text-xs font-mono">{formatBDTime(c.updatedAt)}</td>
-                     <td className="px-6 py-4 rounded-r-2xl border-y border-r border-white/5 text-right"><div className="flex justify-end gap-2"><button onClick={()=>handleOpenModal(c)} className="text-zinc-400 hover:text-white"><Pencil size={16}/></button><button onClick={()=>setDeleteId(c.id)} className="text-red-500 hover:text-white"><div className="text-xs">Delete</div></button></div></td>
-                  </motion.tr>
-                )})}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
-        {customers.length === 0 && <div className="p-12 text-center text-zinc-500 italic">No customers found for {activeMonthName}.</div>}
-      </Card>
-
-      {isModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
-              <Card className="w-full max-w-lg bg-[#09090b] border-zinc-800" title={editingId ? "Edit Customer" : "Add Customer"}>
-                  <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                      <div className="grid grid-cols-2 gap-4">
-                          <Input label="Name" value={form.name} onChange={e=>setForm({...form, name:e.target.value})} required />
-                          <Input label="Phone" value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})} required />
-                      </div>
-                      <Input label="Email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} required />
-                      <Input label="Budget (৳)" type="number" value={form.budget} onChange={e=>setForm({...form, budget:Number(e.target.value)})} required />
-                      
-                      <div>
-                          <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2 ml-1">Status</label>
-                          <div className="relative">
-                            <select 
-                                value={form.status} 
-                                onChange={e=>setForm({...form, status:e.target.value})} 
-                                className="w-full bg-[#0F0F0F] border border-zinc-800 text-white px-4 py-3 rounded-xl outline-none focus:border-red-500 appearance-none cursor-pointer hover:border-zinc-700 transition-colors"
-                            >
-                                <option value="Lead">Lead</option>
-                                <option value="Negotiation">Negotiation</option>
-                                <option value="Closed">Closed (Sold)</option>
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">
-                                <Target size={14} />
-                            </div>
-                          </div>
-                      </div>
-
-                      {/* Enhanced Property Linking for Closing Deals */}
-                      {form.status === 'Closed' && (
-                          <motion.div 
-                            initial={{ opacity: 0, height: 0 }} 
-                            animate={{ opacity: 1, height: 'auto' }} 
-                            className="pt-2 border-t border-white/5 mt-4"
-                          >
-                              <label className="block text-xs font-bold uppercase tracking-wider text-green-400 mb-3 ml-1 flex items-center gap-2">
-                                  <Home size={12} /> Select Sold Property
-                              </label>
-                              
-                              <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 p-3 space-y-3">
-                                  {/* Property Search */}
-                                  <div className="relative">
-                                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" size={14} />
-                                      <input 
-                                          type="text" 
-                                          placeholder="Search by title or address..." 
-                                          value={propertySearch}
-                                          onChange={(e) => setPropertySearch(e.target.value)}
-                                          className="w-full bg-black border border-zinc-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white focus:border-green-500 outline-none placeholder-zinc-600"
-                                      />
-                                  </div>
-
-                                  {/* Property List */}
-                                  <div className="max-h-52 overflow-y-auto custom-scrollbar space-y-2 pr-1">
-                                      {filteredProperties.length > 0 ? (
-                                          filteredProperties.map(p => (
-                                              <div 
-                                                  key={p.id} 
-                                                  onClick={() => setForm({...form, propertyId: p.id})}
-                                                  className={`flex items-center gap-3 p-2 rounded-xl border cursor-pointer transition-all duration-200 group ${
-                                                      form.propertyId === p.id 
-                                                      ? 'bg-green-900/20 border-green-500/50 shadow-[inset_0_0_15px_rgba(34,197,94,0.1)]' 
-                                                      : 'bg-zinc-950 border-zinc-800 hover:border-zinc-600'
-                                                  }`}
-                                              >
-                                                  {/* Thumbnail */}
-                                                  <div className="w-12 h-12 rounded-lg bg-zinc-900 overflow-hidden flex-shrink-0 relative">
-                                                      <img src={`https://picsum.photos/seed/${p.id}/100/100`} className="w-full h-full object-cover" alt={p.title} />
-                                                      {form.propertyId === p.id && (
-                                                          <div className="absolute inset-0 bg-green-500/40 flex items-center justify-center">
-                                                              <CheckCircle size={16} className="text-white drop-shadow-md" />
-                                                          </div>
-                                                      )}
-                                                  </div>
-                                                  
-                                                  {/* Details */}
-                                                  <div className="flex-1 min-w-0">
-                                                      <div className={`text-sm font-bold truncate ${form.propertyId === p.id ? 'text-green-300' : 'text-white'}`}>
-                                                          {p.title}
-                                                      </div>
-                                                      <div className="flex items-center gap-1 text-xs text-zinc-500 truncate">
-                                                          <MapPin size={10} /> {p.address}
-                                                      </div>
-                                                  </div>
-
-                                                  {/* Price & Status */}
-                                                  <div className="text-right flex flex-col items-end gap-1">
-                                                      <div className="text-xs font-bold text-white bg-zinc-800 px-2 py-1 rounded">
-                                                          ৳{(p.price / 100000).toFixed(1)}L
-                                                      </div>
-                                                      {p.status !== 'Available' && (
-                                                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase ${p.status === 'Sold' ? 'bg-red-900/50 text-red-400' : 'bg-blue-900/50 text-blue-400'}`}>
-                                                              {p.status}
-                                                          </span>
-                                                      )}
-                                                  </div>
-                                              </div>
-                                          ))
-                                      ) : (
-                                          <div className="text-center py-6 text-zinc-600 italic text-xs">
-                                              {allProducts.length === 0 ? "No properties found." : "No properties match your search."}
-                                          </div>
-                                      )}
-                                  </div>
-                              </div>
-                          </motion.div>
-                      )}
-
-                      <div className="flex gap-2 pt-4 border-t border-white/5 mt-6">
-                          <Button type="submit" className="flex-1" icon={editingId ? <Pencil size={14}/> : <Plus size={14}/>}>
-                              {editingId ? 'Update Customer' : 'Create Customer'}
-                          </Button>
-                          <Button type="button" variant="ghost" onClick={()=>setIsModalOpen(false)}>Cancel</Button>
-                      </div>
-                  </form>
-              </Card>
+      {/* Filter and Search Toolbar */}
+      <div className="bg-zinc-950/80 p-4 rounded-2xl border border-zinc-800/80 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+          {/* Search Box */}
+          <div className="lg:col-span-2 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search lead name, phone, project, agent..."
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-red-500"
+            />
           </div>
+
+          {/* Stage Filter */}
+          <div>
+            <select
+              value={filterStage}
+              onChange={(e) => setFilterStage(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-red-500"
+            >
+              <option value="all">All Pipeline Stages</option>
+              {PIPELINE_STAGES.map(st => (
+                <option key={st} value={st}>{st}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Category Filter */}
+          <div>
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-red-500"
+            >
+              <option value="all">All Categories</option>
+              <option value="Prospective Client">Prospective Client</option>
+              <option value="Outbound Lead">Outbound Lead</option>
+              <option value="Inbound Lead">Inbound Lead</option>
+              <option value="VIP Investor">VIP Investor</option>
+            </select>
+          </div>
+
+          {/* Source Filter */}
+          <div>
+            <select
+              value={filterSource}
+              onChange={(e) => setFilterSource(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-red-500"
+            >
+              <option value="all">All Lead Sources</option>
+              <option value="WhatsApp">WhatsApp</option>
+              <option value="Website Inquiry">Website Inquiry</option>
+              <option value="Facebook Ads">Facebook Ads</option>
+              <option value="Google Search">Google Search</option>
+              <option value="Referral">Referral</option>
+              <option value="Property Expo">Property Expo</option>
+              <option value="Broker Network">Broker Network</option>
+            </select>
+          </div>
+
+          {/* Agent Filter */}
+          <div>
+            <select
+              value={filterAgent}
+              onChange={(e) => setFilterAgent(e.target.value)}
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-red-500"
+            >
+              <option value="all">All Assigned Agents</option>
+              {agents.map(ag => (
+                <option key={ag.id} value={ag.id}>{ag.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Filter Quick Reset */}
+        {(filterStage !== 'all' || filterCategory !== 'all' || filterSource !== 'all' || filterPriority !== 'all' || filterAgent !== 'all' || searchTerm) && (
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-[11px] text-zinc-400">Active filters:</span>
+            <button
+              onClick={() => {
+                setFilterStage('all');
+                setFilterCategory('all');
+                setFilterSource('all');
+                setFilterPriority('all');
+                setFilterAgent('all');
+                setSearchTerm('');
+              }}
+              className="text-[11px] text-red-400 hover:text-red-300 flex items-center gap-1 font-medium underline"
+            >
+              <X size={12} /> Clear all filters ({filteredLeads.length} matches)
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Main View Display */}
+      {viewMode === 'kanban' ? (
+        <KanbanBoard
+          leads={filteredLeads}
+          onSelectLead={handleOpenLead}
+          onRefresh={loadData}
+        />
+      ) : (
+        /* TABLE VIEW */
+        <div className="bg-zinc-950/80 rounded-2xl border border-zinc-800/80 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-zinc-900/60 text-zinc-400 uppercase tracking-wider font-semibold border-b border-zinc-800">
+                <tr>
+                  <th className="p-4">Client Name & Info</th>
+                  <th className="p-4">Category / Source</th>
+                  <th className="p-4">Pipeline Stage</th>
+                  <th className="p-4">Budget</th>
+                  <th className="p-4">Assigned Agent</th>
+                  <th className="p-4">Activity Log</th>
+                  <th className="p-4">Next Follow-Up</th>
+                  <th className="p-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {filteredLeads.map(lead => (
+                  <tr 
+                    key={lead.id} 
+                    onClick={() => handleOpenLead(lead)}
+                    className="hover:bg-zinc-900/50 cursor-pointer transition-colors"
+                  >
+                    <td className="p-4">
+                      <div className="font-bold text-white text-sm">{lead.name}</div>
+                      <div className="text-zinc-400 text-[11px] flex items-center gap-2 mt-0.5">
+                        <span>{lead.phone}</span>
+                        {lead.interestedProject && (
+                          <span className="text-zinc-500">• {lead.interestedProject}</span>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="p-4">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-900 text-zinc-300 border border-zinc-800 block w-fit">
+                        {lead.category}
+                      </span>
+                      <span className="text-[10px] text-zinc-500 block mt-1">{lead.source}</span>
+                    </td>
+
+                    <td className="p-4">
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-zinc-900 text-zinc-200 border border-zinc-700 whitespace-nowrap">
+                        {lead.status}
+                      </span>
+                    </td>
+
+                    <td className="p-4">
+                      <span className="font-bold text-emerald-400 text-sm">
+                        {formatCurrency(lead.budget)}
+                      </span>
+                      <span className="text-[10px] text-zinc-500 block">{lead.projectType || 'Property'}</span>
+                    </td>
+
+                    <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                      <select
+                        value={lead.agentId || ''}
+                        onChange={(e) => handleQuickAssign(lead.id, e.target.value)}
+                        className="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-300 focus:outline-none focus:border-red-500"
+                      >
+                        <option value="">Unassigned</option>
+                        {agents.map(ag => (
+                          <option key={ag.id} value={ag.id}>{ag.name}</option>
+                        ))}
+                      </select>
+                    </td>
+
+                    <td className="p-4 text-zinc-400">
+                      <div className="flex items-center gap-2.5 text-[11px]">
+                        <span className="flex items-center gap-1" title="Calls">
+                          <Phone size={12} className="text-zinc-500" /> {lead.callCount || 0}
+                        </span>
+                        <span className="flex items-center gap-1" title="WhatsApp">
+                          <MessageSquare size={12} className="text-emerald-500" /> {lead.whatsappCount || 0}
+                        </span>
+                        <span className="flex items-center gap-1" title="Site Visits">
+                          <MapPin size={12} className="text-blue-500" /> {lead.siteVisitCount || 0}
+                        </span>
+                      </div>
+                    </td>
+
+                    <td className="p-4">
+                      {lead.nextFollowUpDate ? (
+                        <div className="text-amber-400 text-[11px] font-medium">
+                          {lead.nextFollowUpDate}
+                          {lead.nextFollowUpTime && <span className="text-zinc-500 block text-[10px]">{lead.nextFollowUpTime}</span>}
+                        </div>
+                      ) : (
+                        <span className="text-zinc-600 text-[11px]">None scheduled</span>
+                      )}
+                    </td>
+
+                    <td className="p-4 text-right">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenLead(lead);
+                        }}
+                        className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-700 transition-all"
+                      >
+                        Open Profile
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
+
+      {/* Modals */}
+      <LeadDetailsModal
+        leadId={selectedLeadId}
+        isOpen={isDetailsOpen}
+        onClose={() => {
+          setIsDetailsOpen(false);
+          setSelectedLeadId(null);
+        }}
+        onLeadUpdated={loadData}
+      />
+
+      <AddLeadModal
+        isOpen={isAddOpen}
+        onClose={() => setIsAddOpen(false)}
+        onLeadAdded={loadData}
+      />
+
+      <ImportLeadsModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onLeadsImported={loadData}
+      />
     </div>
   );
 };

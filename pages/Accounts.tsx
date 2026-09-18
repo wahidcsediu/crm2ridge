@@ -58,10 +58,10 @@ export const Accounts: React.FC = () => {
       if (!report || !config) return null;
 
       // Auto Data (ReadOnly)
-      const salesRevenue = report.income.salesRevenue || 0;
-      const serviceRevenue = report.income.serviceRevenue || 0;
-      const propertyCosts = report.expenses.propertyTransactionCosts || 0;
-      const commissions = report.expenses.details.commissions.reduce((a:any,b:any)=>a+b.amount,0) || 0;
+      const salesRevenue = report?.income?.salesRevenue || 0;
+      const serviceRevenue = report?.income?.serviceRevenue || 0;
+      const propertyCosts = report?.expenses?.propertyTransactionCosts || 0;
+      const commissions = report?.expenses?.details?.commissions ? report.expenses.details.commissions.reduce((a: any, b: any) => a + (b?.amount || 0), 0) : 0;
 
       // Manual Data (Live State)
       const interestIncome = config.interestIncome || 0;
@@ -209,9 +209,9 @@ export const Accounts: React.FC = () => {
                      <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-green-900/20 rounded-lg text-green-400"><Home size={20}/></div>
-                            <div>
+                             <div>
                                 <p className="text-xs font-bold text-zinc-500 uppercase">Sales Revenue (Auto)</p>
-                                <p className="text-xl font-bold text-white">{fmt(report.income.salesRevenue)}</p>
+                                <p className="text-xl font-bold text-white">{fmt(report?.income?.salesRevenue || 0)}</p>
                             </div>
                         </div>
                         <button onClick={() => setShowSalesBreakdown(!showSalesBreakdown)} className="text-zinc-500 hover:text-white"><ChevronDown size={20} /></button>
@@ -219,16 +219,16 @@ export const Accounts: React.FC = () => {
                      <p className="text-[10px] text-zinc-500 mb-2">Derived from closed deals.</p>
                      {showSalesBreakdown && (
                         <div className="border-t border-white/5 pt-2 space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
-                            {report.income.details.soldProducts.length > 0 ? report.income.details.soldProducts.map((item: any, i: number) => (
-                                <div key={i} className="flex justify-between text-xs text-zinc-400"><span className="truncate w-2/3">{item.title}</span><span className="text-green-500">{fmt(item.price)}</span></div>
+                            {(report?.income?.details?.soldProducts || []).length > 0 ? (report?.income?.details?.soldProducts || []).map((item: any, i: number) => (
+                                <div key={i} className="flex justify-between text-xs text-zinc-400"><span className="truncate w-2/3">{item.title}</span><span className="text-green-500">{fmt(item.price || 0)}</span></div>
                             )) : <span className="text-xs text-zinc-600 italic">No sales yet.</span>}
                         </div>
                      )}
-                 </Card>
+                  </Card>
 
-                 {/* Commissions Source */}
-                 <Card className="bg-zinc-900/50 border-zinc-800" noTilt>
-                     <div className="flex items-center justify-between mb-4">
+                  {/* Commissions Source */}
+                  <Card className="bg-zinc-900/50 border-zinc-800" noTilt>
+                      <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-3">
                             <div className="p-2 bg-yellow-900/20 rounded-lg text-yellow-400"><Briefcase size={20}/></div>
                             <div>
@@ -241,12 +241,12 @@ export const Accounts: React.FC = () => {
                      <p className="text-[10px] text-zinc-500 mb-2">Calculated from agent points.</p>
                      {showCommBreakdown && (
                         <div className="border-t border-white/5 pt-2 space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
-                            {report.expenses.details.commissions.map((item: any, i: number) => (
-                                <div key={i} className="flex justify-between text-xs text-zinc-400"><span>{item.name}</span><span className="text-yellow-500">{fmt(item.amount)}</span></div>
+                            {(report?.expenses?.details?.commissions || []).map((item: any, i: number) => (
+                                <div key={i} className="flex justify-between text-xs text-zinc-400"><span>{item.name}</span><span className="text-yellow-500">{fmt(item.amount || 0)}</span></div>
                             ))}
                         </div>
                      )}
-                 </Card>
+                  </Card>
               </div>
 
               {/* THE CONSOLIDATED STATEMENT */}
@@ -264,14 +264,14 @@ export const Accounts: React.FC = () => {
                                 <span className="text-zinc-300 pl-2">Sales Revenue</span>
                                 <div className="flex gap-8">
                                     <span className="text-[10px] text-green-500 uppercase bg-green-900/10 px-1 rounded">Auto</span>
-                                    <span className="text-white w-24 text-right">{fmt(report.income.salesRevenue)}</span>
+                                    <span className="text-white w-24 text-right">{fmt(report?.income?.salesRevenue || 0)}</span>
                                 </div>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-zinc-300 pl-2">Service Revenue (3%)</span>
                                 <div className="flex gap-8">
                                     <span className="text-[10px] text-green-500 uppercase bg-green-900/10 px-1 rounded">Auto</span>
-                                    <span className="text-white w-24 text-right">{fmt(report.income.serviceRevenue)}</span>
+                                    <span className="text-white w-24 text-right">{fmt(report?.income?.serviceRevenue || 0)}</span>
                                 </div>
                             </div>
                             <div className="flex justify-between">
@@ -305,7 +305,7 @@ export const Accounts: React.FC = () => {
                                 <span className="text-zinc-300 pl-2">Cost of Sales (Property VAT/Fees)</span>
                                 <div className="flex gap-8">
                                     <span className="text-[10px] text-green-500 uppercase bg-green-900/10 px-1 rounded">Auto</span>
-                                    <span className="text-white w-24 text-right">{fmt(report.expenses.propertyTransactionCosts)}</span>
+                                    <span className="text-white w-24 text-right">{fmt(report?.expenses?.propertyTransactionCosts || 0)}</span>
                                 </div>
                             </div>
                             <div className="flex justify-between">
